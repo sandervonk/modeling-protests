@@ -1,3 +1,3 @@
 # modeling-protests
 
-`pip install networkx matplotlib`
+`pip install networkx matplotlib scipy`
