@@ -4,7 +4,13 @@ import networkx as nx
 import random
 import time
 import matplotlib.pyplot as pyplot
+from networkx.drawing.nx_agraph import graphviz_layout
 
+
+# 1 - randomly generate a social network
+# 2 - combine difficusion and broadcasting model to represent flow of ideas
+# 3 - potential protesters, turnout; spread of how protests are forming withing the network
+# 4 - repeat 2nd and 3rd step to simulate spread
 
 class Person:
     def __init__(self, id, membership=[], hasInfo=[]):
@@ -52,9 +58,10 @@ class SocialNetwork:
         self.graph.add_edges_from(edges)
 
     def draw(self):
-        pos = nx.spring_layout(self.graph, k=0.5)
+        pos = nx.kamada_kawai_layout(self.graph, scale=2)
         nx.draw_networkx(self.graph, pos, node_size=50, with_labels=False)
         pyplot.show()
 
 
-SocialNetwork(500).draw()
+while True:
+    SocialNetwork(200, 100).draw()
