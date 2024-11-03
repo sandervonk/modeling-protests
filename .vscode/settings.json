@@ -1,0 +1,8 @@
+{
+  "editor.wordWrapColumn": 200,
+  "autopep8.args": ["--max-line-length", "200", "--experimental"],
+  "editor.defaultFormatter": "ms-python.autopep8",
+  "editor.formatOnSave": true,
+  "notebook.defaultFormatter": "ms-python.autopep8",
+  "eslint.enable": false
+}
