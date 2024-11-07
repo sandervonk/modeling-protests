@@ -1,10 +1,11 @@
 # https://networkx.org/documentation/stable/tutorial.html
 # https://stackoverflow.com/questions/19212979/draw-graph-in-networkx
+from networkx.drawing.nx_agraph import graphviz_layout
+import matplotlib.pyplot as pyplot
 import networkx as nx
 import random
 import time
-import matplotlib.pyplot as pyplot
-from networkx.drawing.nx_agraph import graphviz_layout
+import math
 
 
 # 1 - randomly generate a social network
@@ -20,8 +21,17 @@ class Person:
 
 
 class SocialNetwork:
+    colors = {
+        "S": "blue",    # Potential Protestors
+        "I": "red",     # New Protestors
+        "C": "orange",  # Mature Protestors
+        "R": "grey",    # Retired Protestors
+    }
+
     def __init__(self, size, seed_verts=10, intitial_contacts=2, secondary_contacts=1):
         n, n_0, m_r, m_s = size, seed_verts, intitial_contacts, secondary_contacts
+
+        self.size = n
 
         if not (type(n_0) == type(m_r) == type(m_s) == int):
             raise TypeError("n_0, m_r, m_s must be integers")
@@ -35,11 +45,14 @@ class SocialNetwork:
         self.graph = nx.Graph()
 
         # Step 1: start with a seed network of n_0 vertices
-        self.graph.add_nodes_from(range(n_0), [self.getBlankAttribute() for _ in range(n_0)])
+        self.graph.add_nodes_from([(id, self.getBlankAttribute()) for id in range(n_0)])
 
         # Steps 2-4 (5): add in a new vertex
         while self.graph.number_of_nodes() < n:
             self.connect_new(m_r, m_s)
+
+        # Create an associated model to provide updates based on the second paper
+        self.model = Model(self)
 
     def connect_new(self, m_r, m_s):
         id = self.graph.number_of_nodes()
@@ -54,70 +67,92 @@ class SocialNetwork:
         connect_to = set(initials + secondaries)
         edges = [(id, to) for to in connect_to]
 
-        self.graph.add_node(id, self.getBlankAttribute())
+        self.graph.add_nodes_from([(id, self.getBlankAttribute())])
         self.graph.add_edges_from(edges)
 
     def draw(self):
+        nodeTuples = self.graph.nodes(data=True)
+        color_map = [SocialNetwork.colors[attrs["code"]] for id, attrs in nodeTuples]
+
         pos = nx.kamada_kawai_layout(self.graph, scale=2)
-        nx.draw_networkx(self.graph, pos, node_size=50, with_labels=False)
+        nx.draw_networkx(self.graph, pos, node_size=50, with_labels=False, node_color=color_map)
         pyplot.show()
 
     def getBlankAttribute(self):
-        return {"codes": ["S"], "blank": True}
+        return {"code": "S"}
 
     def runDelta(self, code, delta):
+        delta = round(delta)
+        print(f"run Δ{code}={delta}")
         if delta == 0:  # no change
             return
         elif delta < 0:  # remove n=delta with code
-            choice = random.choice(filter(lambda n, d: code in d["codes"], self.graph.nodes(data=True)))
+            pop = sorted(filter(lambda d: code == d[1]["code"], self.graph.nodes(data=True)))
+            choice = random.sample(pop, abs(delta))
+            for id, data in choice:
+                data["code"] = "S"
         elif delta > 0:  # add code to n=delta of type blank
-            choice = random.choice(filter(lambda n, d: d["blank"], self.graph.nodes(data=True)))
+            pop = sorted(filter(lambda d: d[1]["code"] == "S", self.graph.nodes(data=True)))
+            choice = random.sample(pop, delta)
+            for id, data in choice:
+                data["code"] = code
 
     def runUpdate(self, update):
         props, values, deltas = update.props, update.value, update.delta
         for key in props:
-            pass
+            delta = deltas[key]
+            self.runDelta(key, delta)
+
+    def step(self):
+        self.model.step()
+
+    def seed(self):
+        self.model.seed()
 
 
 class Model:
     def __init__(self, network):
         self.network = network
+        self.step_num = 0
 
-        self.n = 0  # ? Time step ???
+        num = network.size  # Size of input network
+        self.n = num        # Total number of protestors
 
-        self.S = 0  # Potential Protesters
-        self.I = 0  # New Protesters
-        self.C = 0  # Mature Protestors
-        self.R = 0  # Retired Protestors
+        self.S = num        # TODO Potential Protesters (add diffusion model on top later)
+        self.I = 0          # New Protesters
+        self.C = 0          # Mature Protestors
+        self.C_0 = self.C  # ?Initial Mature Protestors
+        self.R = 0          # Retired Protestors
 
-        # ? withdrawal rate for experienced (mature???) protestors
-        self.delta_2 = 0.0
-        self.delta_1 = 0.0  # withdrawal rate for new protestors
-        self.delta_0 = self.delta_2 - self.delta_1  # ???
+        self.delta_2 = 0.2  # Withdrawal rate for mature protestors
+        self.delta_1 = 0.5  # Withdrawal rate for new protestors
+        self.delta_0 = self.delta_2 - self.delta_1  # Used as shorthand
 
-        self.chi = 0.0  # rate of new protestors turning into mature protestors
-        self.gamma = 0.0  # ? rate of retired protestors turining into (???)
+        self.chi = 0.0      # Rate of new protestors turning into mature protestors
+        self.gamma = 0.0    # Rate of retired protestors turining into potential protestors
 
-        self.beta_1 = 0.0  # attractiveness to become protestors from new protestors
-        self.beta_2 = 0.0  # attractiveness to become protestors from mature protestors
+        self.beta_1 = 0.3   # Attractiveness to become protestors from new protestors
+        self.beta_2 = 0.6   # Attractiveness to become protestors from mature protestors
+
+    # TODO: Replace temp seeding
+    def seed(self):
+        dS = -15
+        dI = +0
+        dC = +15
+        dR = +0
+        update = ModelUpdate(self, dS, dI, dC, dR)
+        self.network.runUpdate(update)
 
     def omega(self):
-        C_0 = 0  # ? what is C_0 ???
-        return self.delta_2 + self.delta_0 * (C_0 ** self.n) / (((self.I + self.C) ** self.n) + (C_0 ** self.n))
+        # return self.delta_2 + self.delta_0 * (self.C_0 ** self.n) / (((self.I + self.C) ** self.n) + (self.C_0 ** self.n))
+        return (self.I + self.C) / self.network.size
 
     def step(self):
         omega = self.omega()
-        dS = -self.S((self.beta_1 * self.I) + (self.beta_2 * self.C)) + (self.gamma * self.R)
-        dI = self.S((self.beta_1 * self.I) + (self.beta_2 * self.C)) - (self.chi * self.I) - (self.delta_1 * self.I)
+        dS = -self.S*((self.beta_1 * self.I) + (self.beta_2 * self.C)) + (self.gamma * self.R)
+        dI = self.S*((self.beta_1 * self.I) + (self.beta_2 * self.C)) - (self.chi * self.I) - (self.delta_1 * self.I)
         dC = (self.chi * self.I) - (self.C * omega)
         dR = (self.delta_1 * self.I) + (self.C * omega) - (self.gamma * self.R)
-
-        self.S += dS
-        self.I += dI
-        self.C += dC
-        self.R += dR
-
-        self.n += 1
 
         update = ModelUpdate(self, dS, dI, dC, dR)
         self.network.runUpdate(update)
@@ -133,8 +168,15 @@ class ModelUpdate:
             self.value[prop] = getattr(model, prop)
             self.delta[prop] = eval(f"d{prop}")
 
-        return {"props": self.props, "value": self.value, "delta": self.delta}
+            # Apply delta to internals
+            setattr(model, prop, self.value[prop] + self.delta[prop])
+
+        # Apply time step
+        setattr(model, "step_num", getattr(model, "step_num") + 1)
 
 
+network = SocialNetwork(200, 100)
+network.seed()
 while True:
-    SocialNetwork(200, 100).draw()
+    network.draw()
+    network.step()
