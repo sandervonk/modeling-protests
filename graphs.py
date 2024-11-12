@@ -28,6 +28,19 @@ class SocialNetwork:
         "R": "grey",    # Retired Protestors
     }
 
+    takeFrom = {
+        "I": ["S"],  # New comes from potential
+        "C": ["I"],  # Mature comes from new
+        "R": ["I", "C"],  # Retired comes from new & mature
+        "S": ["R"]  # New comes from retired
+    }
+    changeTo = {
+        "S": "I",
+        "I": "C",
+        "R": "S",
+        "C": "R"
+    }
+
     def __init__(self, size, seed_verts=10, intitial_contacts=2, secondary_contacts=1):
         n, n_0, m_r, m_s = size, seed_verts, intitial_contacts, secondary_contacts
 
@@ -83,17 +96,17 @@ class SocialNetwork:
 
     def runDelta(self, code, delta):
         delta = round(delta)
-        print(f"run Δ{code}={delta}")
+        print(f"run d{code}={delta}")
         if delta == 0:  # no change
             return
         elif delta < 0:  # remove n=delta with code
             pop = sorted(filter(lambda d: code == d[1]["code"], self.graph.nodes(data=True)))
-            choice = random.sample(pop, abs(delta))
+            choice = random.sample(pop, min(len(pop), abs(delta)))
             for id, data in choice:
-                data["code"] = "S"
+                data["code"] = SocialNetwork.changeTo[code]
         elif delta > 0:  # add code to n=delta of type blank
-            pop = sorted(filter(lambda d: d[1]["code"] == "S", self.graph.nodes(data=True)))
-            choice = random.sample(pop, delta)
+            pop = sorted(filter(lambda d: d[1]["code"] in SocialNetwork.takeFrom[code], self.graph.nodes(data=True)))
+            choice = random.sample(pop, min(len(pop), delta))
             for id, data in choice:
                 data["code"] = code
 
@@ -115,47 +128,53 @@ class Model:
         self.network = network
         self.step_num = 0
 
-        num = network.size  # Size of input network
-        self.n = num        # Total number of protestors
+        num = network.size     # Size of input network
+        self.n = num           # Total number of population
 
-        self.S = num        # TODO Potential Protesters (add diffusion model on top later)
-        self.I = 0          # New Protesters
-        self.C = 0          # Mature Protestors
-        self.C_0 = self.C  # ?Initial Mature Protestors
-        self.R = 0          # Retired Protestors
+        self.S = num           # TODO Potential Protesters (add diffusion model on top later)
+        self.I = 0             # New Protesters
+        self.C = 0             # Mature Protestors
+        self.C_0 = self.C  # ? Initial Mature Protestors
+        self.R = 0             # Retired Protestors
 
-        self.delta_2 = 0.2  # Withdrawal rate for mature protestors
-        self.delta_1 = 0.5  # Withdrawal rate for new protestors
+        self.delta_2 = 0.2   # Withdrawal rate for mature protestors
+        self.delta_1 = 0.0762  # Withdrawal rate for new protestors
         self.delta_0 = self.delta_2 - self.delta_1  # Used as shorthand
 
-        self.chi = 0.0      # Rate of new protestors turning into mature protestors
-        self.gamma = 0.0    # Rate of retired protestors turining into potential protestors
+        self.chi = 0.0203      # Rate of new protestors turning into mature protestors
+        self.gamma = 0.03      # Rate of retired protestors turining into potential protestors
 
-        self.beta_1 = 0.3   # Attractiveness to become protestors from new protestors
-        self.beta_2 = 0.6   # Attractiveness to become protestors from mature protestors
+        self.beta_1 = 0.0045   # Attractiveness to become protestors from new protestors
+        self.beta_2 = 0.1832   # Attractiveness to become protestors from mature protestors
 
     # TODO: Replace temp seeding
     def seed(self):
-        dS = -15
-        dI = +0
-        dC = +15
-        dR = +0
+        self.C_0 = +10
+        dS = -80
+        dI = +20
+        dC = self.C_0
+        dR = +10
         update = ModelUpdate(self, dS, dI, dC, dR)
         self.network.runUpdate(update)
+        print(self.S, self.I, self.C, self.R)
 
     def omega(self):
         # return self.delta_2 + self.delta_0 * (self.C_0 ** self.n) / (((self.I + self.C) ** self.n) + (self.C_0 ** self.n))
-        return (self.I + self.C) / self.network.size
+        # return (self.I + self.C) / self.network.size
+        return self.delta_2 + self.delta_0 * (self.I + self.C) / self.n
 
     def step(self):
         omega = self.omega()
-        dS = -self.S*((self.beta_1 * self.I) + (self.beta_2 * self.C)) + (self.gamma * self.R)
-        dI = self.S*((self.beta_1 * self.I) + (self.beta_2 * self.C)) - (self.chi * self.I) - (self.delta_1 * self.I)
+        dS = (1 if self.S <= 0 else 0)*((self.beta_1 * self.I) + (self.beta_2 * self.C)) + (self.gamma * self.R)
+        dI = (0 if self.S <= 0 else 1)*((self.beta_1 * self.I) + (self.beta_2 * self.C)) - (self.chi * self.I) - (self.delta_1 * self.I)
         dC = (self.chi * self.I) - (self.C * omega)
         dR = (self.delta_1 * self.I) + (self.C * omega) - (self.gamma * self.R)
 
+        print(dS, dI, dC, dR)
+
         update = ModelUpdate(self, dS, dI, dC, dR)
         self.network.runUpdate(update)
+        print(self.S, self.I, self.C, self.R)
 
 
 class ModelUpdate:
