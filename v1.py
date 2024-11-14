@@ -6,9 +6,6 @@ import networkx as nx
 import random
 import time
 import math
-import copy
-import operator
-from functools import reduce
 
 
 # 1 - randomly generate a social network
@@ -24,18 +21,25 @@ class Person:
 
 
 class SocialNetwork:
-    UNINFORMED = "U"
-    POTENTIAL = "S"
-    NEW = "I"
-    MATURE = "C"
-    RETIRED = "R"
-
     colors = {
-        UNINFORMED: "grey",
-        POTENTIAL: "blue",
-        NEW: "red",
-        MATURE: "orange",
-        RETIRED: "yellow",
+        "U": "grey",    # Uninformed Non-Protestors
+        "S": "blue",    # Potential Protestors
+        "I": "red",     # New Protestors
+        "C": "orange",  # Mature Protestors
+        "R": "yellow",  # Retired Protestors
+    }
+
+    takeFrom = {
+        "I": ["S"],  # New comes from potential
+        "C": ["I"],  # Mature comes from new
+        "R": ["I", "C"],  # Retired comes from new & mature
+        "S": ["R"]  # New comes from retired
+    }
+    changeTo = {
+        "S": "I",
+        "I": "C",
+        "R": "S",
+        "C": "R"
     }
 
     def __init__(self, size, seed_verts=10, intitial_contacts=2, secondary_contacts=1):
@@ -90,27 +94,34 @@ class SocialNetwork:
         pyplot.savefig(f'./plot/{"%04d" % self.model.step_num}.png', bbox_inches="tight", dpi=300)
 
     def getBlankAttribute(self):
-        return {"code": SocialNetwork.POTENTIAL}
+        return {"code": "S"}
+
+    def runDelta(self, code, delta):
+        print(f"run d{code}={delta}")
+        if delta == 0:  # no change
+            return
+        elif delta < 0:  # remove n=delta with code
+            pop = sorted(filter(lambda d: code == d[1]["code"], self.graph.nodes(data=True)))
+            choice = random.sample(pop, min(len(pop), abs(delta)))
+            for id, data in choice:
+                data["code"] = SocialNetwork.changeTo[code]
+        elif delta > 0:  # add code to n=delta of type blank
+            pop = sorted(filter(lambda d: d[1]["code"] in SocialNetwork.takeFrom[code], self.graph.nodes(data=True)))
+            choice = random.sample(pop, min(len(pop), delta))
+            for id, data in choice:
+                data["code"] = code
 
     def runUpdate(self, update):
-        nx.set_node_attributes(self.graph, update.dump())
-
-    def getCounts(self):
-        counts = {
-            SocialNetwork.UNINFORMED: 0,
-            SocialNetwork.POTENTIAL: 0,
-            SocialNetwork.NEW: 0,
-            SocialNetwork.MATURE: 0,
-            SocialNetwork.RETIRED: 0,
-        }
-
-        for id, data in self.graph.nodes(data=True):
-            counts[data["code"]] += 1
-
-        return counts
+        props, values, deltas = update.props, update.value, update.delta
+        for key in props:
+            delta = deltas[key]
+            self.runDelta(key, delta)
 
     def step(self):
         self.model.step()
+
+    def seed(self):
+        self.model.seed()
 
 
 class Model:
@@ -139,73 +150,48 @@ class Model:
 
         self.seed()
 
+    # TODO: Replace temp seeding
+
     def seed(self):
-        # TODO: add in starting proportions
-        pass
+        self.C_0 = +10
+        dS = -80
+        dI = +20
+        dC = self.C_0
+        dR = +10
+        update = ModelUpdate(self, dS, dI, dC, dR)
+        self.network.runUpdate(update)
 
     def omega(self):
         # return self.delta_2 + self.delta_0 * (self.C_0 ** self.n) / (((self.I + self.C) ** self.n) + (self.C_0 ** self.n))
         # return (self.I + self.C) / self.network.size
-        return self.delta_2 + self.delta_0 * (self.counts[SocialNetwork.NEW] + self.counts[SocialNetwork.MATURE]) / self.n
+        return self.delta_2 + self.delta_0 * (self.I + self.C) / self.n
 
-    # Apply state changes to attached network
     def step(self):
-        self.counts = self.network.getCounts()
-
         omega = self.omega()
-        update = ModelUpdate([self.getChangeState(*node, omega) for node in self.network.graph.nodes(data=True)])
+        dS = (1 if self.S <= 0 else 0)*((self.beta_1 * self.I) + (self.beta_2 * self.C)) + (self.gamma * self.R)
+        dI = (0 if self.S <= 0 else 1)*((self.beta_1 * self.I) + (self.beta_2 * self.C)) - (self.chi * self.I) - (self.delta_1 * self.I)
+        dC = (self.chi * self.I) - (self.C * omega)
+        dR = (self.delta_1 * self.I) + (self.C * omega) - (self.gamma * self.R)
+
+        update = ModelUpdate(self, dS, dI, dC, dR)
         self.network.runUpdate(update)
-
-    @staticmethod
-    def doBinomial():
-        # TODO: implement binominal chance
-        return True
-
-    @staticmethod
-    def doProb(chance):
-        return random.random() < chance
-    # Probability-based state change, returned as the new (can be unchanged) state
-
-    def activeNeighbors(self, id):
-        count = 0
-        for neighbor in self.graph.neighbors(id, data=True):
-            if neighbor.code != SocialNetwork.UNINFORMED:
-                count += 1
-        return count
-
-    def getChangeState(self, id, data, omega):
-        newData = copy.copy(data)
-        match data["code"]:
-            case SocialNetwork.UNINFORMED:
-                if Model.doBinomial(self.activeNeighbors(id)):
-                    return SocialNetwork.POTENTIAL
-            case SocialNetwork.POTENTIAL:
-                if Model.doProb(self.counts[SocialNetwork.POTENTIAL] * (self.beta_1 * self.counts[SocialNetwork.NEW] + self.beta_2 * self.counts[SocialNetwork.MATURE])):
-                    return SocialNetwork.NEW
-            case SocialNetwork.NEW:
-                if Model.doProb(self.chi * self.counts[SocialNetwork.NEW]):
-                    return SocialNetwork.MATURE
-                # TODO: check if the probabilities get messed here
-                elif Model.doProb(self.delta_1 * self.counts[SocialNetwork.NEW]):
-                    return SocialNetwork.MATURE
-            case SocialNetwork.MATURE:
-                if Model.doProb(self.counts[SocialNetwork.MATURE] * omega):
-                    return SocialNetwork.RETIRED
-            case SocialNetwork.RETIRED:
-                if Model.doProb(self.gamma * self.counts[SocialNetwork.RETIRED]):
-                    return SocialNetwork.POTENTIAL
-        return {id: newData}
-
-# Wrapper class for array of new states for nodes in model
 
 
 class ModelUpdate:
-    def __init__(self, changes):
-        # TODO; fix
-        self.changes = reduce(operator.add, changes)
+    def __init__(self, model, dS, dI, dC, dR):
+        self.value = dict()
+        self.delta = dict()
+        self.props = {"S", "I", "C", "R"}
 
-    def dump(self):
-        return self.changes
+        for prop in self.props:
+            self.value[prop] = getattr(model, prop)
+            self.delta[prop] = round(self.value[prop] + eval(f"d{prop}")) - round(self.value[prop])
+
+            # Apply delta to internals
+            setattr(model, prop, self.value[prop] + self.delta[prop])
+
+        # Apply time step
+        setattr(model, "step_num", getattr(model, "step_num") + 1)
 
 
 network = SocialNetwork(200, 100)
