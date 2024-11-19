@@ -241,7 +241,7 @@ def drawGraphs(steps, data, path):
     xaxis = numpy.array(range(config["STEPS"]))
     for code in data:
         pyplot.plot(xaxis, numpy.array(data[code]), color=SocialNetwork.colors[code])
-        pyplot.text(xaxis[-1] + 6, data[code][-1], code, color=SocialNetwork.colors[code], fontsize=10, weight="bold")
+        pyplot.text(xaxis[-1] + 4, data[code][-1], code, color=SocialNetwork.colors[code], fontsize=10, weight="bold")
     pyplot.xlabel(f"Steps ({steps} total)")
     pyplot.ylabel("Member count")
     pyplot.title('Members by code over time')
