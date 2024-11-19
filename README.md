@@ -2,10 +2,12 @@
 
 ## Module Installation
 Install the required python package
-```pip3 install networkx matplotlib scipy numpy```
+```
+pip3 install networkx matplotlib scipy numpy
+```
 
-ffmpeg also needs to be installed to create the videos
-- run `brew install ffmpeg` on mac / unix
+**ffmpeg** also needs to be installed to create the videos
+- run `brew install ffmpeg` on mac / unix _(or follow the guide if you don't have homebrew installed)_
 - run `sudo apt install ffmpeg` on umbutu, debian
 - follow [`this guide`](https://www.hostinger.com/tutorials/how-to-install-ffmpeg) on windows or other systems
 
@@ -44,9 +46,14 @@ Runs the model with the options in `config.json` and saves outputs to `./out/`:
 - `{code}.mp4` - network visualization
 - `{code}.json` - step count data used for graphs
 
-```python3 graphs.py```
+```
+python3 graphs.py
+```
 
 
 ## View interactive graph data
-Opens an interactive matplotlib GUI for exploring the plot of code counts over time
-```python3 show.py [run key]``` e.g. `python3 show.py plot` or `python3 show.py plot2` with the default configuration
+Opens an interactive matplotlib GUI for exploring the plot of code counts over time, **after having run the model via `graphs.py`**
+```
+python3 show.py [run key]
+``` 
+_e.g. try `python3 show.py plot` or `python3 show.py plot2` with the default configuration_
