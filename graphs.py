@@ -1,8 +1,5 @@
 # https://networkx.org/documentation/stable/tutorial.html
 # https://stackoverflow.com/questions/19212979/draw-graph-in-networkx
-from networkx.drawing.nx_agraph import graphviz_layout
-from functools import reduce
-
 import matplotlib.pyplot as pyplot
 import networkx as nx
 
@@ -11,6 +8,7 @@ import copy
 import json
 import os
 import subprocess
+import numpy
 
 config = json.load(open('config.json', 'r'))
 MODEL = config["model"]
@@ -174,7 +172,9 @@ class Model:
     # Apply state changes to attached network
     def step(self):
         self.counts = self.network.getCounts()
-        self.graphs[self.step_num] = self.counts
+        for code in self.counts:
+            self.graphs[code] = self.graphs.get(code, [])
+            self.graphs[code].append(self.counts[code])
 
         omega = self.omega()
         update = ModelUpdate([self.getChangeState(*node, omega) for node in self.network.graph.nodes(data=True)])
@@ -236,6 +236,18 @@ class ModelUpdate:
         return self.changes
 
 
+def drawGraphs(steps, data, path):
+
+    xaxis = numpy.array(range(config["STEPS"]))
+    for code in data:
+        pyplot.plot(xaxis, numpy.array(data[code]), color=SocialNetwork.colors[code])
+        pyplot.text(xaxis[-1] + 5, data[code][-1], code, color=SocialNetwork.colors[code], fontsize=10, weight="bold")
+    pyplot.xlabel(f"Steps ({steps} total)")
+    pyplot.ylabel("Member count")
+    pyplot.title('Members by code over time')
+    pyplot.savefig(path, dpi=300)
+
+
 if not os.path.exists("./out"):
     os.mkdir("./out")
 
@@ -245,11 +257,14 @@ for run in config["runs"]:
     network = SocialNetwork(graph=graph, options=config["runs"][run], folder=run)
     for _ in range(config["STEPS"]):
         network.draw()
-        print(f"\r{run} Step {network.model.step_num}/{config["STEPS"]} ", end="")
+
+        print(f"\r{run} Step {network.model.step_num + 1}/{config["STEPS"]} ", end="")
         network.step()
 
     with open(f"./out/{run}.json", "w") as file:
         json.dump(network.model.graphs, file)
+
+    drawGraphs(config["STEPS"], network.model.graphs, f"./out/{run}.jpg")
 
     # Define the command as a list of arguments
     command = [
