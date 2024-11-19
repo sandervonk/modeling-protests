@@ -132,19 +132,23 @@ class Model:
     def __init__(self, network):
         self.network = network
         self.step_num = 0
+        self.graphs = dict()
 
-        num = network.size     # Size of input network
-        self.n = num           # Total number of population
+        num = network.size          # Size of input network
+        self.n = num                # Total number of population
 
-        self.delta_2 = 0.02    # Withdrawal rate for mature protestors
-        self.delta_1 = 0.0762  # Withdrawal rate for new protestors
+        self.delta_2 = 0.02         # Withdrawal rate for mature protestors
+        self.delta_1 = 0.0762       # Withdrawal rate for new protestors
         self.delta_0 = self.delta_2 - self.delta_1  # Used as shorthand
 
-        self.chi = 0.0203      # Rate of new protestors turning into mature protestors
-        self.gamma = 0.03      # Rate of retired protestors turining into potential protestors
+        self.chi = 0.0203           # Rate of new protestors turning into mature protestors
+        self.gamma = 0.03           # Rate of retired protestors turining into potential protestors
 
-        self.beta_1 = 0.0450   # Attractiveness to become protestors from new protestors
-        self.beta_2 = 0.1832   # Attractiveness to become protestors from mature protestors
+        self.beta_1 = 0.0450        # Attractiveness to become protestors from new protestors
+        self.beta_2 = 0.1832        # Attractiveness to become protestors from mature protestors
+
+        self.informLoneProb = 0.01  # Probability of lone uninformed nodes learning about protests (online?)
+        self.informEachProb = 0.12  # Contribution of neighbor nodes to converting uninformed nodes
 
         self.seed()
 
@@ -171,17 +175,17 @@ class Model:
     # Apply state changes to attached network
     def step(self):
         self.counts = self.network.getCounts()
+        self.graphs[self.step_num] = self.counts
 
         omega = self.omega()
         update = ModelUpdate([self.getChangeState(*node, omega) for node in self.network.graph.nodes(data=True)])
         self.step_num += 1
         self.network.runUpdate(update)
 
-    @staticmethod
-    def doBinomial(n):
-        p = 0.25
+    def doBinomial(self, n):
+        p = self.informEachProb
         # implement binominal chance as derived by Pete
-        return Model.doProb(100 * (1 - (1 - p)**n))
+        return Model.doProb((100 * (1 - (1 - p)**n)) if n != 0 else 100 * self.informLoneProb)
 
     @staticmethod
     def doProb(chance):
@@ -201,7 +205,7 @@ class Model:
         newData = copy.copy(data)
         match data["code"]:
             case SocialNetwork.UNINFORMED:
-                if Model.doBinomial(self.activeNeighbors(id)):
+                if self.doBinomial(self.activeNeighbors(id)):
                     newData["code"] = SocialNetwork.POTENTIAL
             case SocialNetwork.POTENTIAL:
                 if Model.doProb(self.counts[SocialNetwork.POTENTIAL] * (self.beta_1 * self.counts[SocialNetwork.NEW] + self.beta_2 * self.counts[SocialNetwork.MATURE])):
@@ -233,8 +237,11 @@ class ModelUpdate:
         return self.changes
 
 
+STEPS = 200
 network = SocialNetwork(200, 100)
-for _ in range(200):
+for _ in range(STEPS):
     network.draw()
-    print("Step", network.model.step_num)
+    print(f"\rStep {network.model.step_num}/{STEPS} ", end="")
     network.step()
+
+print(network.model.graphs)
