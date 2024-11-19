@@ -12,9 +12,6 @@ import json
 import os
 import subprocess
 
-# sped up figure save rendering
-import threading
-
 config = json.load(open('config.json', 'r'))
 MODEL = config["model"]
 
@@ -97,14 +94,8 @@ class SocialNetwork:
         nx.draw_networkx(self.graph, pos, node_size=50, with_labels=False, node_color=color_map)
         pyplot.axis('off')
 
-        # threaded save to reduce hanging time
         fig = pyplot.gcf()
         SocialNetwork.saveFrame(self.folder, fig, self.model.step_num)
-        # threading.Thread(
-        #     target=SocialNetwork.saveFrame,
-        #     args=(self.folder, fig, self.model.step_num),
-        #     daemon=True
-        # ).start()
 
     @staticmethod
     def saveFrame(folder, fig, step_num):
@@ -112,7 +103,7 @@ class SocialNetwork:
         if not os.path.exists(path):
             os.makedirs(path)
 
-        filename = path + f'/{step_num:04d}.png'
+        filename = path + f'/{step_num:04d}.jpg'
         fig.savefig(filename, bbox_inches="tight", dpi=300)
         pyplot.close(fig)
 
@@ -245,6 +236,9 @@ class ModelUpdate:
         return self.changes
 
 
+if not os.path.exists("./out"):
+    os.mkdir("./out")
+
 base_graph = SocialNetwork(MODEL["size"]["total"], MODEL["size"]["seed"]).graph
 for run in config["runs"]:
     graph = copy.deepcopy(base_graph)
@@ -254,8 +248,6 @@ for run in config["runs"]:
         print(f"\r{run} Step {network.model.step_num}/{config["STEPS"]} ", end="")
         network.step()
 
-    if not os.path.exists("./out"):
-        os.mkdir("./out")
     with open(f"./out/{run}.json", "w") as file:
         json.dump(network.model.graphs, file)
 
@@ -263,7 +255,7 @@ for run in config["runs"]:
     command = [
         "ffmpeg",
         "-framerate", "20",
-        "-i", f"./runs/{run}/%04d.png",
+        "-i", f"./runs/{run}/%04d.jpg",
         "-c:v", "libx264",
         "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
         "-pix_fmt", "yuv420p",
@@ -272,4 +264,4 @@ for run in config["runs"]:
     ]
 
     # Run the command
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True, capture_output=True)
