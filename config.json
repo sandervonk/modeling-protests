@@ -1,0 +1,29 @@
+{
+    "STEPS": 200,
+    "model": {
+        "size": {
+            "total": 200,
+            "seed": 100
+        },
+        "seed": {
+            "UNINFORMED": 0,
+            "POTENTIAL": 0,
+            "NEW": 12,
+            "MATURE": 15,
+            "RETIRED": 15
+        }
+    },
+    "runs": {
+         "plot": {
+             "delta_2": 0.02,
+             "delta_1": 0.0762,
+             "chi": 0.0203,
+             "gamma": 0.03,
+             "beta_1": 0.0450,
+             "beta_2": 0.1832,
+             "inform_lone": 0.005,
+             "inform_each": 0.070,
+             "forget": 0.13
+         }
+    }
+}

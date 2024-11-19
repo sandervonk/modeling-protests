@@ -1,26 +1,28 @@
 # https://networkx.org/documentation/stable/tutorial.html
 # https://stackoverflow.com/questions/19212979/draw-graph-in-networkx
 from networkx.drawing.nx_agraph import graphviz_layout
-import matplotlib.pyplot as pyplot
-import networkx as nx
-import random
-import copy
 from functools import reduce
 
-# speed up save functionality
+import matplotlib.pyplot as pyplot
+import networkx as nx
+
+import random
+import copy
+import json
+import os
+import subprocess
+
+# sped up figure save rendering
 import threading
+
+config = json.load(open('config.json', 'r'))
+MODEL = config["model"]
 
 
 # 1 - randomly generate a social network
 # 2 - combine difficusion and broadcasting model to represent flow of ideas
 # 3 - potential protesters, turnout; spread of how protests are forming withing the network
 # 4 - repeat 2nd and 3rd step to simulate spread
-
-class Person:
-    def __init__(self, id, membership=[], hasInfo=[]):
-        self.id = id
-        self.memberOf = set(membership)
-        self.hasInfo = set(hasInfo)
 
 
 class SocialNetwork:
@@ -38,31 +40,38 @@ class SocialNetwork:
         RETIRED: "yellow",
     }
 
-    def __init__(self, size, seed_verts=10, intitial_contacts=2, secondary_contacts=1):
+    def __init__(self, size=20, seed_verts=10, intitial_contacts=2, secondary_contacts=1,
+                 folder="plot", graph=None, options=None):
         n, n_0, m_r, m_s = size, seed_verts, intitial_contacts, secondary_contacts
 
-        self.size = n
+        self.folder = folder
+        if graph != None:
+            self.graph = graph
+            self.size = graph.number_of_nodes()
+        else:
+            self.size = n
 
-        if not (type(n_0) == type(m_r) == type(m_s) == int):
-            raise TypeError("n_0, m_r, m_s must be integers")
-        elif (m_r < 1) or (m_s < 0):
-            raise ValueError("m_r must be >= 1 and m_s >= 0")
-        elif n_0 < 1:
-            raise ValueError("n_0 verticies in seed network must be >= 1")
+            if not (type(n_0) == type(m_r) == type(m_s) == int):
+                raise TypeError("n_0, m_r, m_s must be integers")
+            elif (m_r < 1) or (m_s < 0):
+                raise ValueError("m_r must be >= 1 and m_s >= 0")
+            elif n_0 < 1:
+                raise ValueError("n_0 verticies in seed network must be >= 1")
 
-        # Base graph on social network model algorithm from 2.2 in
-        # https://www.sciencedirect.com/science/article/pii/S0378437106003931
-        self.graph = nx.Graph()
+            # Base graph on social network model algorithm from 2.2 in
+            # https://www.sciencedirect.com/science/article/pii/S0378437106003931
+            self.graph = nx.Graph()
 
-        # Step 1: start with a seed network of n_0 vertices
-        self.graph.add_nodes_from([(id, self.getBlankAttribute()) for id in range(n_0)])
+            # Step 1: start with a seed network of n_0 vertices
+            self.graph.add_nodes_from([(id, self.getBlankAttribute()) for id in range(n_0)])
 
-        # Steps 2-4 (5): add in a new vertex
-        while self.graph.number_of_nodes() < n:
-            self.connect_new(m_r, m_s)
+            # Steps 2-4 (5): add in a new vertex
+            while self.graph.number_of_nodes() < n:
+                self.connect_new(m_r, m_s)
 
         # Create an associated model to provide updates based on the second paper
-        self.model = Model(self)
+        if options != None:
+            self.model = Model(self, options)
 
     def connect_new(self, m_r, m_s):
         id = self.graph.number_of_nodes()
@@ -90,17 +99,17 @@ class SocialNetwork:
 
         # threaded save to reduce hanging time
         fig = pyplot.gcf()
-        threading.Thread(
-            target=SocialNetwork.saveFrame,
-            args=(fig, self.model.step_num),
-            daemon=True
-        ).start()
+        SocialNetwork.saveFrame(self.folder, fig, self.model.step_num)
+        # threading.Thread(
+        #     target=SocialNetwork.saveFrame,
+        #     args=(self.folder, fig, self.model.step_num),
+        #     daemon=True
+        # ).start()
 
-    # thread called save implementation
     @staticmethod
-    def saveFrame(fig, step_num):
+    def saveFrame(folder, fig, step_num):
         """Save the figure in a separate thread."""
-        filename = f'./plot/{step_num:04d}.png'
+        filename = f'./runs/{folder}/{step_num:04d}.png'
         fig.savefig(filename, bbox_inches="tight", dpi=300)
         pyplot.close(fig)
 
@@ -129,37 +138,33 @@ class SocialNetwork:
 
 
 class Model:
-    def __init__(self, network):
+    def __init__(self, network, OPT):
         self.network = network
         self.step_num = 0
         self.graphs = dict()
 
-        num = network.size          # Size of input network
-        self.n = num                # Total number of population
+        num = network.size                          # Size of input network
+        self.n = num                                # Total number of population
 
-        self.delta_2 = 0.02         # Withdrawal rate for mature protestors
-        self.delta_1 = 0.0762       # Withdrawal rate for new protestors
-        self.delta_0 = self.delta_2 - self.delta_1  # Used as shorthand
+        self.delta_2 = OPT["delta_2"]               # Withdrawal rate for mature protestors
+        self.delta_1 = OPT["delta_1"]               # Withdrawal rate for new protestors
+        self.delta_0 = self.delta_2 - self.delta_1  # Used as shorthand only
 
-        self.chi = 0.0203           # Rate of new protestors turning into mature protestors
-        self.gamma = 0.03           # Rate of retired protestors turining into potential protestors
+        self.chi = OPT["chi"]                       # Rate of new protestors turning into mature protestors
+        self.gamma = OPT["gamma"]                   # Rate of retired protestors turining into potential protestors
 
-        self.beta_1 = 0.0450        # Attractiveness to become protestors from new protestors
-        self.beta_2 = 0.1832        # Attractiveness to become protestors from mature protestors
+        self.beta_1 = OPT["beta_1"]                 # Attractiveness to become protestors from new protestors
+        self.beta_2 = OPT["beta_2"]                 # Attractiveness to become protestors from mature protestors
 
-        self.informLoneProb = 0.01  # Probability of lone uninformed nodes learning about protests (online?)
-        self.informEachProb = 0.12  # Contribution of neighbor nodes to converting uninformed nodes
+        self.inform_lone = OPT["inform_lone"]       # Probability of lone uninformed nodes learning about protests (online?)
+        self.inform_each = OPT["inform_each"]       # Contribution of neighbor nodes to converting uninformed nodes
+
+        self.forget = OPT["forget"]*100             # Probability of forgetting experiences and becoming uninformed in retirement, corrected for other prob format
 
         self.seed()
 
     def seed(self):
-        counts = {
-            SocialNetwork.UNINFORMED: 0,
-            SocialNetwork.POTENTIAL: 0,
-            SocialNetwork.NEW: 12,
-            SocialNetwork.MATURE: 15,
-            SocialNetwork.RETIRED: 15,
-        }
+        counts = {getattr(SocialNetwork, key, 0): MODEL["seed"][key] for key in MODEL["seed"]}
         num = 0
         for code in counts:
             while counts[code] > 0 and num < self.n:
@@ -182,10 +187,9 @@ class Model:
         self.step_num += 1
         self.network.runUpdate(update)
 
+    # implement binominal chance as derived by Pete
     def doBinomial(self, n):
-        p = self.informEachProb
-        # implement binominal chance as derived by Pete
-        return Model.doProb((100 * (1 - (1 - p)**n)) if n != 0 else 100 * self.informLoneProb)
+        return Model.doProb((100 * (1 - (1 - self.inform_each)**n)) if n != 0 else 100 * self.inform_lone)
 
     @staticmethod
     def doProb(chance):
@@ -195,8 +199,8 @@ class Model:
 
     def activeNeighbors(self, id):
         count = 0
-        for neighborId in self.network.graph.neighbors(id):
-            neighbor = self.network.graph.nodes[neighborId]
+        for neighbor_id in self.network.graph.neighbors(id):
+            neighbor = self.network.graph.nodes[neighbor_id]
             if neighbor["code"] != SocialNetwork.UNINFORMED:
                 count += 1
         return count
@@ -211,9 +215,9 @@ class Model:
                 if Model.doProb(self.counts[SocialNetwork.POTENTIAL] * (self.beta_1 * self.counts[SocialNetwork.NEW] + self.beta_2 * self.counts[SocialNetwork.MATURE])):
                     newData["code"] = SocialNetwork.NEW
             case SocialNetwork.NEW:
+                # TODO: check if the probabilities get messed here
                 if Model.doProb(self.chi * self.counts[SocialNetwork.NEW]):
                     newData["code"] = SocialNetwork.MATURE
-                # TODO: check if the probabilities get messed here
                 elif Model.doProb(self.delta_1 * self.counts[SocialNetwork.NEW]):
                     newData["code"] = SocialNetwork.MATURE
             case SocialNetwork.MATURE:
@@ -222,13 +226,14 @@ class Model:
             case SocialNetwork.RETIRED:
                 if Model.doProb(self.gamma * self.counts[SocialNetwork.RETIRED]):
                     newData["code"] = SocialNetwork.POTENTIAL
+                elif Model.doProb(self.forget):
+                    newData["code"] = SocialNetwork.UNINFORMED
         return {id: newData}
 
 
 # Wrapper class for array of new states for nodes in model
 class ModelUpdate:
     def __init__(self, changes):
-        # TODO; fix
         self.changes = dict()
         for change in changes:
             self.changes.update(change)
@@ -237,11 +242,29 @@ class ModelUpdate:
         return self.changes
 
 
-STEPS = 200
-network = SocialNetwork(200, 100)
-for _ in range(STEPS):
-    network.draw()
-    print(f"\rStep {network.model.step_num}/{STEPS} ", end="")
-    network.step()
+base_graph = SocialNetwork(MODEL["size"]["total"], MODEL["size"]["seed"]).graph
+for run in config["runs"]:
+    graph = copy.deepcopy(base_graph)
+    network = SocialNetwork(graph=graph, options=config["runs"][run], folder=run)
+    for _ in range(config["STEPS"]):
+        network.draw()
+        print(f"\r{run} Step {network.model.step_num}/{config["STEPS"]} ", end="")
+        network.step()
 
-print(network.model.graphs)
+    with open(f"./out/{run}.json", "w") as file:
+        json.dump(network.model.graphs, file)
+
+    # Define the command as a list of arguments
+    command = [
+        "ffmpeg",
+        "-framerate", "20",
+        "-i", f"./runs/{run}/%04d.png",
+        "-c:v", "libx264",
+        "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
+        "-pix_fmt", "yuv420p",
+        f"./out/{run}.mp4",
+        "-y"
+    ]
+
+    # Run the command
+    subprocess.run(command, check=True)
