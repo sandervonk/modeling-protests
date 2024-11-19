@@ -241,7 +241,7 @@ def drawGraphs(steps, data, path):
     xaxis = numpy.array(range(config["STEPS"]))
     for code in data:
         pyplot.plot(xaxis, numpy.array(data[code]), color=SocialNetwork.colors[code])
-        pyplot.text(xaxis[-1] + 5, data[code][-1], code, color=SocialNetwork.colors[code], fontsize=10, weight="bold")
+        pyplot.text(xaxis[-1] + 6, data[code][-1], code, color=SocialNetwork.colors[code], fontsize=10, weight="bold")
     pyplot.xlabel(f"Steps ({steps} total)")
     pyplot.ylabel("Member count")
     pyplot.title('Members by code over time')
@@ -258,7 +258,7 @@ for run in config["runs"]:
     for _ in range(config["STEPS"]):
         network.draw()
 
-        print(f"\r{run} Step {network.model.step_num + 1}/{config["STEPS"]} ", end="")
+        print(f"\r{run} Step {network.model.step_num + 1}/{config['STEPS']} ", end="")
         network.step()
 
     with open(f"./out/{run}.json", "w") as file:
