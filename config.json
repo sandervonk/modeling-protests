@@ -24,7 +24,7 @@
              "beta_2": 0.1832,
              "inform_lone": 0.005,
              "inform_each": 0.070,
-             "forget": 0.23
+             "forget": 0.05
          },
          "plot2": {
              "delta_2": 0.10,
@@ -35,7 +35,7 @@
              "beta_2": 0.1432,
              "inform_lone": 0.009,
              "inform_each": 0.210,
-             "forget": 0.11
+             "forget": 0.08
          }
     }
 }

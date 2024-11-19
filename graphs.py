@@ -166,7 +166,7 @@ class Model:
         self.inform_lone = OPT["inform_lone"]       # Probability of lone uninformed nodes learning about protests (online?)
         self.inform_each = OPT["inform_each"]       # Contribution of neighbor nodes to converting uninformed nodes
 
-        self.forget = OPT["forget"]*100             # Probability of forgetting experiences and becoming uninformed in retirement, corrected for other prob format
+        self.forget = OPT["forget"]                 # Probability of forgetting experiences and becoming uninformed in retirement, corrected for other prob format
 
         self.seed()
 
@@ -198,11 +198,11 @@ class Model:
 
     # implement binominal chance as derived by Pete
     def doBinomial(self, n):
-        return Model.doProb((100 * (1 - (1 - self.inform_each)**n)) if n != 0 else 100 * self.inform_lone)
+        return Model.doProb(((1 - (1 - self.inform_each)**n)) if n != 0 else self.inform_lone)
 
     @staticmethod
     def doProb(chance):
-        result = random.random() * 100 < abs(chance)
+        result = random.random() < abs(chance)
         return result
     # Probability-based state change, returned as the new (can be unchanged) state
 
@@ -225,15 +225,15 @@ class Model:
                     newData["code"] = SocialNetwork.NEW
             case SocialNetwork.NEW:
                 # TODO: check if the probabilities get messed here
-                if Model.doProb(self.chi * self.counts[SocialNetwork.NEW]):
+                if Model.doProb(self.chi):
                     newData["code"] = SocialNetwork.MATURE
-                elif Model.doProb(self.delta_1 * self.counts[SocialNetwork.NEW]):
+                elif Model.doProb(self.delta_1):
                     newData["code"] = SocialNetwork.MATURE
             case SocialNetwork.MATURE:
-                if Model.doProb(self.counts[SocialNetwork.MATURE] * omega):
+                if Model.doProb(omega):
                     newData["code"] = SocialNetwork.RETIRED
             case SocialNetwork.RETIRED:
-                if Model.doProb(self.gamma * self.counts[SocialNetwork.RETIRED]):
+                if Model.doProb(self.gamma):
                     newData["code"] = SocialNetwork.POTENTIAL
                 elif Model.doProb(self.forget):
                     newData["code"] = SocialNetwork.UNINFORMED
@@ -251,7 +251,7 @@ class ModelUpdate:
         return self.changes
 
 
-def drawGraphs(steps, data, path):
+def drawGraphs(steps, data, path=None, show=False):
     pyplot.rcdefaults()
     xaxis = numpy.array(range(config["STEPS"]))
     for code in data:
@@ -264,7 +264,10 @@ def drawGraphs(steps, data, path):
 
     pyplot.legend(loc="upper right", fontsize='small')
 
-    pyplot.savefig(path, dpi=config["DPI"])
+    if path != None:
+        pyplot.savefig(path, dpi=config["DPI"])
+    if show:
+        pyplot.show()
 
 
 def runSteps(graph, num, folder):
@@ -277,9 +280,9 @@ def runSteps(graph, num, folder):
         network.step()
 
     with open(f"./out/{folder}.json", "w") as file:
-        json.dump(network.model.graphs, file)
+        json.dump({"data": network.model.graphs, "steps": num}, file)
 
-    drawGraphs(num, network.model.graphs, f"./out/{folder}.jpg")
+    drawGraphs(num, network.model.graphs, path=f"./out/{folder}.jpg")
 
     # Define the command as a list of arguments
     command = [
