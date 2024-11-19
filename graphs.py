@@ -202,7 +202,7 @@ class Model:
 
     @staticmethod
     def doProb(chance):
-        result = random.random() < abs(chance)
+        result = random.random() < max(chance, 0)
         return result
     # Probability-based state change, returned as the new (can be unchanged) state
 
@@ -221,7 +221,7 @@ class Model:
                 if self.doBinomial(self.activeNeighbors(id)):
                     newData["code"] = SocialNetwork.POTENTIAL
             case SocialNetwork.POTENTIAL:
-                if Model.doProb(self.counts[SocialNetwork.POTENTIAL] * (self.beta_1 * self.counts[SocialNetwork.NEW] + self.beta_2 * self.counts[SocialNetwork.MATURE])):
+                if Model.doProb(self.beta_1 + self.beta_2):
                     newData["code"] = SocialNetwork.NEW
             case SocialNetwork.NEW:
                 # TODO: check if the probabilities get messed here
