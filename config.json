@@ -1,5 +1,6 @@
 {
     "STEPS": 200,
+    "DPI": 400,
     "model": {
         "size": {
             "total": 200,

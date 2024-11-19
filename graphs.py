@@ -1,6 +1,7 @@
 # https://networkx.org/documentation/stable/tutorial.html
 # https://stackoverflow.com/questions/19212979/draw-graph-in-networkx
 import matplotlib.pyplot as pyplot
+import matplotlib
 import networkx as nx
 
 import random
@@ -9,6 +10,7 @@ import json
 import os
 import subprocess
 import numpy
+import threading
 
 config = json.load(open('config.json', 'r'))
 MODEL = config["model"]
@@ -26,6 +28,14 @@ class SocialNetwork:
     NEW = "I"
     MATURE = "C"
     RETIRED = "R"
+
+    longCodes = {
+        UNINFORMED: "Uninformed",
+        POTENTIAL: "Potential",
+        NEW: "New",
+        MATURE: "Mature",
+        RETIRED: "Retired",
+    }
 
     colors = {
         UNINFORMED: "grey",
@@ -85,12 +95,17 @@ class SocialNetwork:
         self.graph.add_edges_from(edges)
 
     def draw(self):
+        pyplot.rcdefaults()
         nodeTuples = self.graph.nodes(data=True)
         color_map = [SocialNetwork.colors[attrs["code"]] for id, attrs in nodeTuples]
 
         pos = nx.kamada_kawai_layout(self.graph, scale=2)
         nx.draw_networkx(self.graph, pos, node_size=50, with_labels=False, node_color=color_map)
         pyplot.axis('off')
+
+        for code in SocialNetwork.longCodes:
+            pyplot.plot([], [], color=SocialNetwork.colors[code], label=SocialNetwork.longCodes[code], marker="o", linestyle='')
+        pyplot.legend(loc="upper left", fontsize='small')
 
         fig = pyplot.gcf()
         SocialNetwork.saveFrame(self.folder, fig, self.model.step_num)
@@ -102,7 +117,7 @@ class SocialNetwork:
             os.makedirs(path)
 
         filename = path + f'/{step_num:04d}.jpg'
-        fig.savefig(filename, bbox_inches="tight", dpi=300)
+        fig.savefig(filename, bbox_inches="tight", dpi=config["DPI"])
         pyplot.close(fig)
 
     def getBlankAttribute(self):
@@ -237,34 +252,34 @@ class ModelUpdate:
 
 
 def drawGraphs(steps, data, path):
-
+    pyplot.rcdefaults()
     xaxis = numpy.array(range(config["STEPS"]))
     for code in data:
-        pyplot.plot(xaxis, numpy.array(data[code]), color=SocialNetwork.colors[code])
+        pyplot.plot(xaxis, numpy.array(data[code]), color=SocialNetwork.colors[code], label=SocialNetwork.longCodes[code])
         pyplot.text(xaxis[-1] + 4, data[code][-1], code, color=SocialNetwork.colors[code], fontsize=10, weight="bold")
+
     pyplot.xlabel(f"Steps ({steps} total)")
     pyplot.ylabel("Member count")
-    pyplot.title('Members by code over time')
-    pyplot.savefig(path, dpi=300)
+    pyplot.title('Distribution of members by code')
+
+    pyplot.legend(loc="upper right", fontsize='small')
+
+    pyplot.savefig(path, dpi=config["DPI"])
 
 
-if not os.path.exists("./out"):
-    os.mkdir("./out")
-
-base_graph = SocialNetwork(MODEL["size"]["total"], MODEL["size"]["seed"]).graph
-for run in config["runs"]:
+def runSteps(graph, num, folder):
     graph = copy.deepcopy(base_graph)
-    network = SocialNetwork(graph=graph, options=config["runs"][run], folder=run)
-    for _ in range(config["STEPS"]):
+    network = SocialNetwork(graph=graph, options=config["runs"][folder], folder=folder)
+    for _ in range(num):
         network.draw()
 
-        print(f"\r{run} Step {network.model.step_num + 1}/{config['STEPS']} ", end="")
+        print(f"\r{folder} Step {network.model.step_num + 1}/{config['STEPS']} ", end="")
         network.step()
 
-    with open(f"./out/{run}.json", "w") as file:
+    with open(f"./out/{folder}.json", "w") as file:
         json.dump(network.model.graphs, file)
 
-    drawGraphs(config["STEPS"], network.model.graphs, f"./out/{run}.jpg")
+    drawGraphs(num, network.model.graphs, f"./out/{folder}.jpg")
 
     # Define the command as a list of arguments
     command = [
@@ -280,3 +295,15 @@ for run in config["runs"]:
 
     # Run the command
     subprocess.run(command, check=True, capture_output=True)
+
+
+if __name__ == '__main__':
+    matplotlib.use('agg')
+
+    if not os.path.exists("./out"):
+        os.mkdir("./out")
+
+    base_graph = SocialNetwork(MODEL["size"]["total"], MODEL["size"]["seed"]).graph
+    for run in config["runs"]:
+        # threading.Thread(target=runSteps, args=(copy.deepcopy(base_graph), config["STEPS"], run)).start()
+        runSteps(copy.deepcopy(base_graph), config["STEPS"], run)
