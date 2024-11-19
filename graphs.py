@@ -10,7 +10,6 @@ import json
 import os
 import subprocess
 import numpy
-import threading
 
 config = json.load(open('config.json', 'r'))
 MODEL = config["model"]
@@ -96,6 +95,8 @@ class SocialNetwork:
 
     def draw(self):
         pyplot.rcdefaults()
+        pyplot.clf()
+
         nodeTuples = self.graph.nodes(data=True)
         color_map = [SocialNetwork.colors[attrs["code"]] for id, attrs in nodeTuples]
 
@@ -253,6 +254,7 @@ class ModelUpdate:
 
 def drawGraphs(steps, data, path=None, show=False):
     pyplot.rcdefaults()
+    pyplot.clf()
     xaxis = numpy.array(range(config["STEPS"]))
     for code in data:
         pyplot.plot(xaxis, numpy.array(data[code]), color=SocialNetwork.colors[code], label=SocialNetwork.longCodes[code])
