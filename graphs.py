@@ -108,8 +108,11 @@ class SocialNetwork:
 
     @staticmethod
     def saveFrame(folder, fig, step_num):
-        """Save the figure in a separate thread."""
-        filename = f'./runs/{folder}/{step_num:04d}.png'
+        path = f"./runs/{folder}"
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        filename = path + f'/{step_num:04d}.png'
         fig.savefig(filename, bbox_inches="tight", dpi=300)
         pyplot.close(fig)
 
@@ -251,6 +254,8 @@ for run in config["runs"]:
         print(f"\r{run} Step {network.model.step_num}/{config["STEPS"]} ", end="")
         network.step()
 
+    if not os.path.exists("./out"):
+        os.mkdir("./out")
     with open(f"./out/{run}.json", "w") as file:
         json.dump(network.model.graphs, file)
 
