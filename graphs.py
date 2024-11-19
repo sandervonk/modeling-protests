@@ -4,11 +4,11 @@ from networkx.drawing.nx_agraph import graphviz_layout
 import matplotlib.pyplot as pyplot
 import networkx as nx
 import random
-import time
-import math
 import copy
-import operator
 from functools import reduce
+
+# speed up save functionality
+import threading
 
 
 # 1 - randomly generate a social network
@@ -87,10 +87,25 @@ class SocialNetwork:
         pos = nx.kamada_kawai_layout(self.graph, scale=2)
         nx.draw_networkx(self.graph, pos, node_size=50, with_labels=False, node_color=color_map)
         pyplot.axis('off')
-        pyplot.savefig(f'./plot/{"%04d" % self.model.step_num}.png', bbox_inches="tight", dpi=300)
+
+        # threaded save to reduce hanging time
+        fig = pyplot.gcf()
+        threading.Thread(
+            target=SocialNetwork.saveFrame,
+            args=(fig, self.model.step_num),
+            daemon=True
+        ).start()
+
+    # thread called save implementation
+    @staticmethod
+    def saveFrame(fig, step_num):
+        """Save the figure in a separate thread."""
+        filename = f'./plot/{step_num:04d}.png'
+        fig.savefig(filename, bbox_inches="tight", dpi=300)
+        pyplot.close(fig)
 
     def getBlankAttribute(self):
-        return {"code": SocialNetwork.POTENTIAL}
+        return {"code": SocialNetwork.UNINFORMED}
 
     def runUpdate(self, update):
         nx.set_node_attributes(self.graph, update.dump())
@@ -121,12 +136,6 @@ class Model:
         num = network.size     # Size of input network
         self.n = num           # Total number of population
 
-        self.S = num           # TODO Potential Protesters (add diffusion model on top later)
-        self.I = 0             # New Protesters
-        self.C = 0             # Mature Protestors
-        self.C_0 = self.C  # ? Initial Mature Protestors
-        self.R = 0             # Retired Protestors
-
         self.delta_2 = 0.02    # Withdrawal rate for mature protestors
         self.delta_1 = 0.0762  # Withdrawal rate for new protestors
         self.delta_0 = self.delta_2 - self.delta_1  # Used as shorthand
@@ -140,8 +149,19 @@ class Model:
         self.seed()
 
     def seed(self):
-        # TODO: add in starting proportions
-        pass
+        counts = {
+            SocialNetwork.UNINFORMED: 0,
+            SocialNetwork.POTENTIAL: 0,
+            SocialNetwork.NEW: 12,
+            SocialNetwork.MATURE: 15,
+            SocialNetwork.RETIRED: 15,
+        }
+        num = 0
+        for code in counts:
+            while counts[code] > 0 and num < self.n:
+                self.network.graph.nodes[num]["code"] = code
+                counts[code] -= 1
+                num += 1
 
     def omega(self):
         # return self.delta_2 + self.delta_0 * (self.C_0 ** self.n) / (((self.I + self.C) ** self.n) + (self.C_0 ** self.n))
@@ -154,22 +174,26 @@ class Model:
 
         omega = self.omega()
         update = ModelUpdate([self.getChangeState(*node, omega) for node in self.network.graph.nodes(data=True)])
+        self.step_num += 1
         self.network.runUpdate(update)
 
     @staticmethod
-    def doBinomial():
-        # TODO: implement binominal chance
-        return True
+    def doBinomial(n):
+        p = 0.25
+        # implement binominal chance as derived by Pete
+        return Model.doProb(100 * (1 - (1 - p)**n))
 
     @staticmethod
     def doProb(chance):
-        return random.random() < chance
+        result = random.random() * 100 < abs(chance)
+        return result
     # Probability-based state change, returned as the new (can be unchanged) state
 
     def activeNeighbors(self, id):
         count = 0
-        for neighbor in self.graph.neighbors(id, data=True):
-            if neighbor.code != SocialNetwork.UNINFORMED:
+        for neighborId in self.network.graph.neighbors(id):
+            neighbor = self.network.graph.nodes[neighborId]
+            if neighbor["code"] != SocialNetwork.UNINFORMED:
                 count += 1
         return count
 
@@ -178,31 +202,32 @@ class Model:
         match data["code"]:
             case SocialNetwork.UNINFORMED:
                 if Model.doBinomial(self.activeNeighbors(id)):
-                    return SocialNetwork.POTENTIAL
+                    newData["code"] = SocialNetwork.POTENTIAL
             case SocialNetwork.POTENTIAL:
                 if Model.doProb(self.counts[SocialNetwork.POTENTIAL] * (self.beta_1 * self.counts[SocialNetwork.NEW] + self.beta_2 * self.counts[SocialNetwork.MATURE])):
-                    return SocialNetwork.NEW
+                    newData["code"] = SocialNetwork.NEW
             case SocialNetwork.NEW:
                 if Model.doProb(self.chi * self.counts[SocialNetwork.NEW]):
-                    return SocialNetwork.MATURE
+                    newData["code"] = SocialNetwork.MATURE
                 # TODO: check if the probabilities get messed here
                 elif Model.doProb(self.delta_1 * self.counts[SocialNetwork.NEW]):
-                    return SocialNetwork.MATURE
+                    newData["code"] = SocialNetwork.MATURE
             case SocialNetwork.MATURE:
                 if Model.doProb(self.counts[SocialNetwork.MATURE] * omega):
-                    return SocialNetwork.RETIRED
+                    newData["code"] = SocialNetwork.RETIRED
             case SocialNetwork.RETIRED:
                 if Model.doProb(self.gamma * self.counts[SocialNetwork.RETIRED]):
-                    return SocialNetwork.POTENTIAL
+                    newData["code"] = SocialNetwork.POTENTIAL
         return {id: newData}
 
+
 # Wrapper class for array of new states for nodes in model
-
-
 class ModelUpdate:
     def __init__(self, changes):
         # TODO; fix
-        self.changes = reduce(operator.add, changes)
+        self.changes = dict()
+        for change in changes:
+            self.changes.update(change)
 
     def dump(self):
         return self.changes
