@@ -1,7 +1,7 @@
 {
     "STEPS": 200,
     "DPI": 400,
-    "FPS": 60,
+    "FPS": 30,
     "SKIP": 1,
     "model": {
         "size": {
@@ -24,8 +24,8 @@
              "gamma": 0.03,
              "beta_1": 0.0450,
              "beta_2": 0.1832,
-             "inform_lone": 0.005,
-             "inform_each": 0.070,
+             "inform_lone": 0.003,
+             "inform_each": 0.031,
              "forget": 0.05
          },
          "plot2": {
