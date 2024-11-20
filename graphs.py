@@ -8,8 +8,10 @@ import random
 import copy
 import json
 import os
+import shutil
 import subprocess
 import numpy
+from tqdm import tqdm
 
 config = json.load(open('config.json', 'r'))
 MODEL = config["model"]
@@ -114,10 +116,9 @@ class SocialNetwork:
     @staticmethod
     def saveFrame(folder, fig, step_num):
         path = f"./runs/{folder}"
-        if not os.path.exists(path):
-            os.makedirs(path)
 
-        filename = path + f'/{step_num:04d}.jpg'
+        filename = path + f'/{(step_num // config["SKIP"]):04d}.jpg'
+
         fig.savefig(filename, bbox_inches="tight", dpi=config["DPI"])
         pyplot.close(fig)
 
@@ -275,11 +276,12 @@ def drawGraphs(steps, data, path=None, show=False):
 def runSteps(graph, num, folder):
     graph = copy.deepcopy(base_graph)
     network = SocialNetwork(graph=graph, options=config["runs"][folder], folder=folder)
-    for _ in range(num):
-        network.draw()
-
-        print(f"\r{folder} Step {network.model.step_num + 1}/{config['STEPS']} ", end="")
+    progress = tqdm(total=num, desc=folder, unit="steps", leave=True)
+    for i in range(num):
+        if i % config["SKIP"] == 0:
+            network.draw()
         network.step()
+        progress.update(1)
 
     with open(f"./out/{folder}.json", "w") as file:
         json.dump({"data": network.model.graphs, "steps": num}, file)
@@ -289,7 +291,7 @@ def runSteps(graph, num, folder):
     # Define the command as a list of arguments
     command = [
         "ffmpeg",
-        "-framerate", "20",
+        "-framerate", str(config["FPS"] // config["SKIP"]),
         "-i", f"./runs/{run}/%04d.jpg",
         "-c:v", "libx264",
         "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
@@ -307,8 +309,15 @@ if __name__ == '__main__':
 
     if not os.path.exists("./out"):
         os.mkdir("./out")
+    if not os.path.exists("./runs"):
+        os.mkdir("./runs")
 
     base_graph = SocialNetwork(MODEL["size"]["total"], MODEL["size"]["seed"]).graph
     for run in config["runs"]:
+        path = f"./runs/{run}"
+        if os.path.exists(path):
+            shutil.rmtree(path)
+
+        os.mkdir(path)
         # threading.Thread(target=runSteps, args=(copy.deepcopy(base_graph), config["STEPS"], run)).start()
         runSteps(copy.deepcopy(base_graph), config["STEPS"], run)

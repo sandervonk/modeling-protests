@@ -3,7 +3,7 @@
 ## Module Installation
 Install the required python package
 ```
-pip3 install networkx matplotlib scipy numpy
+pip3 install networkx matplotlib scipy numpy tqdm
 ```
 
 **ffmpeg** also needs to be installed to create the videos
@@ -18,6 +18,8 @@ pip3 install networkx matplotlib scipy numpy
 Model options can be configured in the config.json file. The options are as follow:
 - **STEPS**: (int) the number of steps to run the model for
 - **DPI**: (int) the dots per inch to save matplotlib renders at
+- **FPS**: (int) the frames (steps) per second that the final video will play at; this will be corrected for the skip factor
+- **SKIP**: (int) the number of steps to skip between rendered frames. default is 1
 - Model: (dict) options for the model, as follows
     - Size: the "shape" or "size" of the initial model
         - **total**: (int) full number of nodes for the network to reach during the build stage
