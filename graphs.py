@@ -212,7 +212,7 @@ class Model:
         count = 0
         for neighbor_id in self.network.graph.neighbors(id):
             neighbor = self.network.graph.nodes[neighbor_id]
-            if neighbor["code"] != SocialNetwork.UNINFORMED:
+            if neighbor["code"] not in [SocialNetwork.UNINFORMED, SocialNetwork.POTENTIAL]:
                 count += 1
         return count
 
