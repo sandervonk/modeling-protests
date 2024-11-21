@@ -17,27 +17,38 @@
         }
     },
     "runs": {
-         "plot": {
-             "delta_2": 0.12,
-             "delta_1": 0.0762,
-             "chi": 0.0203,
-             "gamma": 0.03,
-             "beta_1": 0.0450,
-             "beta_2": 0.1832,
-             "inform_lone": 0.003,
-             "inform_each": 0.031,
-             "forget": 0.05
-         },
-         "plot2": {
-             "delta_2": 0.18,
-             "delta_1": 0.0762,
-             "chi": 0.0203,
-             "gamma": 0.02,
-             "beta_1": 0.0450,
-             "beta_2": 0.1432,
-             "inform_lone": 0.009,
-             "inform_each": 0.210,
-             "forget": 0.08
-         }
+        "stable_uninformed": {
+            "delta_2": 0.12,
+            "delta_1": 0.0762,
+            "chi": 0.0203,
+            "gamma": 0.03,
+            "beta_1": 0.0450,
+            "beta_2": 0.1832,
+            "inform_lone": 0.003,
+            "inform_each": 0.031,
+            "forget": 0.05
+        },
+        "high_mature": {
+            "delta_2": 0.05, 
+            "delta_1": 0.0762,
+            "chi": 0.0203,
+            "gamma": 0.03,
+            "beta_1": 0.0450,
+            "beta_2": 0.1832,
+            "inform_lone": 0.01,
+            "inform_each": 0.07,
+            "forget": 0.1
+        },
+        "low_dropout": {
+            "delta_2": 0.18,
+            "delta_1": 0.0762,
+            "chi": 0.0203,
+            "gamma": 0.02,
+            "beta_1": 0.0450,
+            "beta_2": 0.1432,
+            "inform_lone": 0.009,
+            "inform_each": 0.210,
+            "forget": 0.08
+        }
     }
 }

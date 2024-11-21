@@ -30,7 +30,7 @@ Model options can be configured in the config.json file. The options are as foll
         - **NEW** (int): Number of new protesters to start with
         - **MATURE** (int): Number of mature protesters to start with
         - **RETIRED** (int): Number of retired protesters to start with
-- Runs: maps names of runs (anything you choose) to their model coefficient options; _e.g. in the default config, two runs will occur on each model run (both will run on the same initial seeded social network shape), "plot" and "plot2", and save their respective files to the `./out/` folder (see [render and save](#))._ Each name key corresponds to a dictionary of the following constant values:
+- Runs: maps names of runs (anything you choose) to their model coefficient options; _e.g. in the default config, two runs will occur on each model run (both will run on the same initial seeded social network shape), "stable_uninformed" and "high_mature", and save their respective files to the `./out/` folder (see [render and save](#))._ Each name key corresponds to a dictionary of the following constant values:
     - **delta_2** (float): Withdrawal rate for mature protestors
     - **delta_1** (float): Withdrawal rate for new protestors
     - **chi** (float): Rate of new protestors turning into mature protestors
@@ -58,4 +58,4 @@ Opens an interactive matplotlib GUI for exploring the plot of code counts over t
 ```
 python3 show.py [run key]
 ``` 
-_e.g. try `python3 show.py plot` or `python3 show.py plot2` with the default configuration_
+_e.g. try `python3 show.py stable_uninformed` or `python3 show.py high_mature` with the default configuration_
