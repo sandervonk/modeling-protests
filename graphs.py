@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import numpy
 from tqdm import tqdm
+import pickle
 
 config = json.load(open('config.json', 'r'))
 MODEL = config["model"]
@@ -49,8 +50,8 @@ class SocialNetwork:
     def __init__(self, size=20, seed_verts=10, intitial_contacts=2, secondary_contacts=1,
                  folder="plot", graph=None, options=None):
         n, n_0, m_r, m_s = size, seed_verts, intitial_contacts, secondary_contacts
-
         self.folder = folder
+        self.history = []
         if graph != None:
             self.graph = graph
             self.size = graph.number_of_nodes()
@@ -95,26 +96,26 @@ class SocialNetwork:
         self.graph.add_nodes_from([(id, self.getBlankAttribute())])
         self.graph.add_edges_from(edges)
 
-    def draw(self):
+    @staticmethod
+    def draw(graph):
         pyplot.rcdefaults()
         pyplot.clf()
 
-        nodeTuples = self.graph.nodes(data=True)
+        nodeTuples = graph.nodes(data=True)
         color_map = [SocialNetwork.colors[attrs["code"]] for id, attrs in nodeTuples]
 
-        pos = nx.kamada_kawai_layout(self.graph, scale=2)
-        nx.draw_networkx(self.graph, pos, node_size=50, with_labels=False, node_color=color_map)
+        pos = nx.kamada_kawai_layout(graph, scale=2)
+        nx.draw_networkx(graph, pos, node_size=50, with_labels=False, node_color=color_map)
         pyplot.axis('off')
 
         for code in SocialNetwork.longCodes:
             pyplot.plot([], [], color=SocialNetwork.colors[code], label=SocialNetwork.longCodes[code], marker="o", linestyle='')
         pyplot.legend(loc="upper left", fontsize='small')
 
-        fig = pyplot.gcf()
-        SocialNetwork.saveFrame(self.folder, fig, self.model.step_num)
+        return pyplot.gcf()
 
     @staticmethod
-    def saveFrame(folder, fig, step_num):
+    def save_frame(folder, fig, step_num):
         path = f"./runs/{folder}"
 
         filename = path + f'/{(step_num // config["SKIP"]):04d}.jpg'
@@ -144,6 +145,11 @@ class SocialNetwork:
 
     def step(self):
         self.model.step()
+
+    def save_step(self, run):
+        path = f'./runs/{run}/graphs/{self.model.step_num:04d}.pickle'
+        pickle.dump(self.graph, open(path, 'wb'))
+        self.history.append(path)
 
 
 class Model:
@@ -253,7 +259,7 @@ class ModelUpdate:
         return self.changes
 
 
-def drawGraphs(steps, data, path=None, show=False):
+def draw_plots(steps, data, path=None, show=False):
     pyplot.rcdefaults()
     pyplot.clf()
     xaxis = numpy.array(range(steps))
@@ -268,7 +274,7 @@ def drawGraphs(steps, data, path=None, show=False):
     pyplot.legend(loc="upper right", fontsize='small')
 
     if path != None:
-        pyplot.savefig(path, dpi=config["DPI"])
+        pyplot.savefig(path, bbox_inches="tight", dpi=config["DPI"])
     if show:
         pyplot.show()
 
@@ -278,37 +284,52 @@ def run_steps(graph, num, folder, frames):
     progress = tqdm(total=num, desc=folder, unit="steps", leave=True)
     for i in range(num):
         if frames and i % config["SKIP"] == 0:
-            network.draw()
+            SocialNetwork.save_frame(network.folder, SocialNetwork.draw(network.graph), network.model.step_num)
         network.step()
+        network.save_step(folder)
         progress.update(1)
 
     with open(f"./out/{folder}.json", "w") as file:
-        json.dump({"data": network.model.graphs, "steps": num}, file)
+        json.dump({"data": network.model.graphs, "steps": num, "graphs": network.history}, file)
 
-    drawGraphs(num, network.model.graphs, path=f"./out/{folder}.jpg")
+    draw_plots(num, network.model.graphs, path=f"./out/{folder}.jpg")
 
     out_path = f"./out/{folder}.mp4"
     # render video if frames have been generated
     if frames and num > config["SKIP"]:
-        command = [
-            "ffmpeg",
-            "-framerate", str(config["FPS"] // config["SKIP"]),
-            "-i", f"./runs/{folder}/%04d.jpg",
-            "-c:v", "libx264",
-            "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-            "-pix_fmt", "yuv420p",
-            out_path,
-            "-y"
-        ]
-        subprocess.run(command, check=True, capture_output=True)
+        render_video(folder)
     # else remove old video
     elif os.path.exists(out_path):
         os.remove(out_path)
 
 
+def render_all(frames=config["STEPS"]):
+    matplotlib.use('agg')
+    for folder in config["runs"]:
+        progress = tqdm(total=frames, desc=f"Render {folder}", unit="steps", leave=True)
+        for step in range(1, frames + 1):
+            graph = pickle.load(open(f"./runs/{folder}/graphs/{step:04d}.pickle", 'rb'))
+            SocialNetwork.draw(graph).savefig(f"./runs/{folder}/{step:04d}.jpg", bbox_inches="tight", dpi=config["DPI"])
+            progress.update(1)
+        render_video(folder)
+
+
+def render_video(folder):
+    command = [
+        "ffmpeg",
+        "-framerate", str(config["FPS"] // config["SKIP"]),
+        "-i", f"./runs/{folder}/%04d.jpg",
+        "-c:v", "libx264",
+        "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
+        "-pix_fmt", "yuv420p",
+        f"./out/{folder}.mp4",
+        "-y"
+    ]
+    subprocess.run(command, check=True, capture_output=True)
+
+
 def run_all(frames=True, num=config["STEPS"]):
     matplotlib.use('agg')
-
     if not os.path.exists("./out"):
         os.mkdir("./out")
     if not os.path.exists("./runs"):
@@ -320,7 +341,7 @@ def run_all(frames=True, num=config["STEPS"]):
         if os.path.exists(path):
             shutil.rmtree(path)
 
-        os.mkdir(path)
+        os.makedirs(path + "/graphs")
         run_steps(copy.deepcopy(base_graph), num, run, frames)
 
 

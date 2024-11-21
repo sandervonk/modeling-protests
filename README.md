@@ -56,8 +56,18 @@ Runs the model with the options in `config.json` and saves **graph outputs only*
 - `{code}.jpg` - graph of counts of each code by step
 - `{code}.json` - step count data used for graphs
 
+Frame count is optional, as well as the render and remove keywords, possible calls may include:
+
 ```
 python3 headless.py
+```
+python3 headless.py 2000
+```
+``````
+python3 headless.py remove
+```
+```
+python3 headless.py 100 render remove
 ```
 
 

@@ -1,4 +1,4 @@
-from graphs import drawGraphs
+from graphs import draw_plots
 import sys
 import json
 
@@ -10,4 +10,4 @@ try:
 except FileNotFoundError:
     raise ValueError(f"Run '{sys.argv[1]}' does not exist or has not yet been generated")
 
-drawGraphs(data["steps"], data["data"], show=True)
+draw_plots(data["steps"], data["data"], show=True)
