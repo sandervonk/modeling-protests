@@ -4,5 +4,7 @@
   "editor.defaultFormatter": "ms-python.autopep8",
   "editor.formatOnSave": true,
   "notebook.defaultFormatter": "ms-python.autopep8",
-  "eslint.enable": false
+  "eslint.enable": false,
+  "liveshare.gitignore": "none",
+  "liveshare.launcherClient": "visualStudioCode"
 }
