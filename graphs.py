@@ -120,7 +120,7 @@ class SocialNetwork:
         filename = path + f'/{(step_num // config["SKIP"]):04d}.jpg'
 
         fig.savefig(filename, bbox_inches="tight", dpi=config["DPI"])
-        pyplot.close(fig)
+        pyplot.clf()
 
     def getBlankAttribute(self):
         return {"code": SocialNetwork.UNINFORMED}
