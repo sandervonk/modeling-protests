@@ -256,7 +256,7 @@ class ModelUpdate:
 def drawGraphs(steps, data, path=None, show=False):
     pyplot.rcdefaults()
     pyplot.clf()
-    xaxis = numpy.array(range(config["STEPS"]))
+    xaxis = numpy.array(range(steps))
     for code in data:
         pyplot.plot(xaxis, numpy.array(data[code]), color=SocialNetwork.colors[code], label=SocialNetwork.longCodes[code])
         pyplot.text(xaxis[-1] + 4, data[code][-1], code, color=SocialNetwork.colors[code], fontsize=10, weight="bold")
@@ -273,12 +273,11 @@ def drawGraphs(steps, data, path=None, show=False):
         pyplot.show()
 
 
-def runSteps(graph, num, folder):
-    graph = copy.deepcopy(base_graph)
+def run_steps(graph, num, folder, frames):
     network = SocialNetwork(graph=graph, options=config["runs"][folder], folder=folder)
     progress = tqdm(total=num, desc=folder, unit="steps", leave=True)
     for i in range(num):
-        if i % config["SKIP"] == 0:
+        if frames and i % config["SKIP"] == 0:
             network.draw()
         network.step()
         progress.update(1)
@@ -288,23 +287,26 @@ def runSteps(graph, num, folder):
 
     drawGraphs(num, network.model.graphs, path=f"./out/{folder}.jpg")
 
-    # Define the command as a list of arguments
-    command = [
-        "ffmpeg",
-        "-framerate", str(config["FPS"] // config["SKIP"]),
-        "-i", f"./runs/{run}/%04d.jpg",
-        "-c:v", "libx264",
-        "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-        "-pix_fmt", "yuv420p",
-        f"./out/{run}.mp4",
-        "-y"
-    ]
+    out_path = f"./out/{folder}.mp4"
+    # render video if frames have been generated
+    if frames and num > config["SKIP"]:
+        command = [
+            "ffmpeg",
+            "-framerate", str(config["FPS"] // config["SKIP"]),
+            "-i", f"./runs/{folder}/%04d.jpg",
+            "-c:v", "libx264",
+            "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
+            "-pix_fmt", "yuv420p",
+            out_path,
+            "-y"
+        ]
+        subprocess.run(command, check=True, capture_output=True)
+    # else remove old video
+    elif os.path.exists(out_path):
+        os.remove(out_path)
 
-    # Run the command
-    subprocess.run(command, check=True, capture_output=True)
 
-
-if __name__ == '__main__':
+def run_all(frames=True, num=config["STEPS"]):
     matplotlib.use('agg')
 
     if not os.path.exists("./out"):
@@ -319,5 +321,8 @@ if __name__ == '__main__':
             shutil.rmtree(path)
 
         os.mkdir(path)
-        # threading.Thread(target=runSteps, args=(copy.deepcopy(base_graph), config["STEPS"], run)).start()
-        runSteps(copy.deepcopy(base_graph), config["STEPS"], run)
+        run_steps(copy.deepcopy(base_graph), num, run, frames)
+
+
+if __name__ == '__main__':
+    run_all()

@@ -52,6 +52,14 @@ Runs the model with the options in `config.json` and saves outputs to `./out/`:
 python3 graphs.py
 ```
 
+Runs the model with the options in `config.json` and saves **graph outputs only** to `./out/`:
+- `{code}.jpg` - graph of counts of each code by step
+- `{code}.json` - step count data used for graphs
+
+```
+python3 headless.py
+```
+
 
 ## View interactive graph data
 Opens an interactive matplotlib GUI for exploring the plot of code counts over time, **after having run the model via `graphs.py`**
