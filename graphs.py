@@ -18,10 +18,29 @@ config = json.load(open('config.json', 'r'))
 MODEL = config["model"]
 
 
-# 1 - randomly generate a social network
-# 2 - combine difficusion and broadcasting model to represent flow of ideas
-# 3 - potential protesters, turnout; spread of how protests are forming withing the network
-# 4 - repeat 2nd and 3rd step to simulate spread
+""" Social network class that represents a community as a graph with "code" attributes 
+    that correspond to what type of protester the person is at (if at all). The codes are:
+    - U: Uninformed, these members do not know about protests
+    - S: Potential protestors, these members have learned information from others but do not
+            protest yet themselves. They understand what is happening
+    - I: New protestors, who are just getting into the landscape as a contributing member
+    - C: Mature protestors, those who actively lead and organize protests
+    - R: Retired protestors, who have protested but stopped (they can rejoin or forget)
+    
+    Creation of a social network graph structure follows the steps outlined in one of the
+    source papers https://www.sciencedirect.com/science/article/pii/S0378437106003931 2.2:
+    - 1: Start with a seed network of n_0 vertices
+    - 2: Add in a new vertex
+    - 3: Pick m_r vertices and m_s neighbors of each of those vertices
+    - 4: Connect the new vertex to the vertices picked in step 3
+    - 5: Repeat steps 2-4 until size n is reached
+    
+    The social network steps and evolves by following the following pattern:
+    - 1: randomly generate a social network
+    - 2: combine diffusion and broadcasting model to represent flow of ideas
+    - 3: potential protesters, turnout; spread of how protests are forming withing the network
+    - 4: repeat 2nd and 3rd steps to simulate spread
+"""
 
 
 class SocialNetwork:
@@ -31,7 +50,7 @@ class SocialNetwork:
     MATURE = "C"
     RETIRED = "R"
 
-    longCodes = {
+    long_codes = {
         UNINFORMED: "Uninformed",
         POTENTIAL: "Potential",
         NEW: "New",
@@ -65,12 +84,10 @@ class SocialNetwork:
             elif n_0 < 1:
                 raise ValueError("n_0 verticies in seed network must be >= 1")
 
-            # Base graph on social network model algorithm from 2.2 in
-            # https://www.sciencedirect.com/science/article/pii/S0378437106003931
             self.graph = nx.Graph()
 
             # Step 1: start with a seed network of n_0 vertices
-            self.graph.add_nodes_from([(id, self.getBlankAttribute()) for id in range(n_0)])
+            self.graph.add_nodes_from([(id, self.get_blank_attribute()) for id in range(n_0)])
 
             # Steps 2-4 (5): add in a new vertex
             while self.graph.number_of_nodes() < n:
@@ -93,7 +110,7 @@ class SocialNetwork:
         connect_to = set(initials + secondaries)
         edges = [(id, to) for to in connect_to]
 
-        self.graph.add_nodes_from([(id, self.getBlankAttribute())])
+        self.graph.add_nodes_from([(id, self.get_blank_attribute())])
         self.graph.add_edges_from(edges)
 
     @staticmethod
@@ -101,15 +118,15 @@ class SocialNetwork:
         pyplot.rcdefaults()
         pyplot.clf()
 
-        nodeTuples = graph.nodes(data=True)
-        color_map = [SocialNetwork.colors[attrs["code"]] for id, attrs in nodeTuples]
+        node_tuples = graph.nodes(data=True)
+        color_map = [SocialNetwork.colors[attrs["code"]] for id, attrs in node_tuples]
 
         pos = nx.kamada_kawai_layout(graph, scale=2)
         nx.draw_networkx(graph, pos, node_size=50, with_labels=False, node_color=color_map)
         pyplot.axis('off')
 
-        for code in SocialNetwork.longCodes:
-            pyplot.plot([], [], color=SocialNetwork.colors[code], label=SocialNetwork.longCodes[code], marker="o", linestyle='')
+        for code in SocialNetwork.long_codes:
+            pyplot.plot([], [], color=SocialNetwork.colors[code], label=SocialNetwork.long_codes[code], marker="o", linestyle='')
         pyplot.legend(loc="upper left", fontsize='small')
 
         return pyplot.gcf()
@@ -123,13 +140,13 @@ class SocialNetwork:
         fig.savefig(filename, bbox_inches="tight", dpi=config["DPI"])
         pyplot.clf()
 
-    def getBlankAttribute(self):
+    def get_blank_attribute(self):
         return {"code": SocialNetwork.UNINFORMED}
 
-    def runUpdate(self, update):
+    def run_update(self, update):
         nx.set_node_attributes(self.graph, update.dump())
 
-    def getCounts(self):
+    def get_counts(self):
         counts = {
             SocialNetwork.UNINFORMED: 0,
             SocialNetwork.POTENTIAL: 0,
@@ -150,6 +167,19 @@ class SocialNetwork:
         path = f'./runs/{run}/graphs/{self.model.step_num:04d}.pickle'
         pickle.dump(self.graph, open(path, 'wb'))
         self.history.append(path)
+
+
+"""
+    Model class that does the math intensive part of simulation; gets key network data 
+    through the linked Model[instance].network
+    
+    Uses coeffs from config.json to inform the state changes that are made through 
+    repeated calls to Model[instance].get_change_state, forming a ModelUpdate[instance] 
+    that is passed to the graph as updated node attributes (changing their codes)
+    
+    These updates and calculated probabilities of switching at different stages are 
+    determined in line with the paper [TODO: LINK]
+"""
 
 
 class Model:
@@ -194,27 +224,27 @@ class Model:
 
     # Apply state changes to attached network
     def step(self):
-        self.counts = self.network.getCounts()
+        self.counts = self.network.get_counts()
         for code in self.counts:
             self.graphs[code] = self.graphs.get(code, [])
             self.graphs[code].append(self.counts[code])
 
         omega = self.omega()
-        update = ModelUpdate([self.getChangeState(*node, omega) for node in self.network.graph.nodes(data=True)])
+        update = ModelUpdate([self.get_change_state(*node, omega) for node in self.network.graph.nodes(data=True)])
         self.step_num += 1
-        self.network.runUpdate(update)
+        self.network.run_update(update)
 
     # implement binominal chance as derived by Pete
-    def doBinomial(self, n):
-        return Model.doProb(((1 - (1 - self.inform_each)**n)) if n != 0 else self.inform_lone)
+    def do_binomial(self, n):
+        return Model.do_prob(((1 - (1 - self.inform_each)**n)) if n != 0 else self.inform_lone)
 
     @staticmethod
-    def doProb(chance):
+    def do_prob(chance):
         result = random.random() < max(chance, 0)
         return result
     # Probability-based state change, returned as the new (can be unchanged) state
 
-    def activeNeighbors(self, id):
+    def active_neighbors(self, id):
         count = 0
         for neighbor_id in self.network.graph.neighbors(id):
             neighbor = self.network.graph.nodes[neighbor_id]
@@ -222,33 +252,35 @@ class Model:
                 count += 1
         return count
 
-    def getChangeState(self, id, data, omega):
+    def get_change_state(self, id, data, omega):
         newData = copy.copy(data)
         match data["code"]:
             case SocialNetwork.UNINFORMED:
-                if self.doBinomial(self.activeNeighbors(id)):
+                if self.do_binomial(self.active_neighbors(id)):
                     newData["code"] = SocialNetwork.POTENTIAL
             case SocialNetwork.POTENTIAL:
-                if Model.doProb(self.beta_1 + self.beta_2):
+                if Model.do_prob(self.beta_1 + self.beta_2):
                     newData["code"] = SocialNetwork.NEW
             case SocialNetwork.NEW:
                 # TODO: check if the probabilities get messed here
-                if Model.doProb(self.chi):
+                if Model.do_prob(self.chi):
                     newData["code"] = SocialNetwork.MATURE
-                elif Model.doProb(self.delta_1):
+                elif Model.do_prob(self.delta_1):
                     newData["code"] = SocialNetwork.MATURE
             case SocialNetwork.MATURE:
-                if Model.doProb(omega):
+                if Model.do_prob(omega):
                     newData["code"] = SocialNetwork.RETIRED
             case SocialNetwork.RETIRED:
-                if Model.doProb(self.gamma):
+                if Model.do_prob(self.gamma):
                     newData["code"] = SocialNetwork.POTENTIAL
-                elif Model.doProb(self.forget):
+                elif Model.do_prob(self.forget):
                     newData["code"] = SocialNetwork.UNINFORMED
         return {id: newData}
 
 
-# Wrapper class for array of new states for nodes in model
+"""Wrapper class for array of new states for nodes in model"""
+
+
 class ModelUpdate:
     def __init__(self, changes):
         self.changes = dict()
@@ -264,7 +296,7 @@ def draw_plots(steps, data, path=None, show=False):
     pyplot.clf()
     xaxis = numpy.array(range(steps))
     for code in data:
-        pyplot.plot(xaxis, numpy.array(data[code]), color=SocialNetwork.colors[code], label=SocialNetwork.longCodes[code])
+        pyplot.plot(xaxis, numpy.array(data[code]), color=SocialNetwork.colors[code], label=SocialNetwork.long_codes[code])
         pyplot.text(xaxis[-1] + 4, data[code][-1], code, color=SocialNetwork.colors[code], fontsize=10, weight="bold")
 
     pyplot.xlabel(f"Steps ({steps} total)")
@@ -279,7 +311,7 @@ def draw_plots(steps, data, path=None, show=False):
         pyplot.show()
 
 
-def run_steps(graph, num, folder, frames):
+def run_steps(graph, num, folder, frames, dump=None):
     network = SocialNetwork(graph=graph, options=config["runs"][folder], folder=folder)
     progress = tqdm(total=num, desc=folder, unit="steps", leave=True)
     for i in range(num):
@@ -289,7 +321,7 @@ def run_steps(graph, num, folder, frames):
         network.save_step(folder)
         progress.update(1)
 
-    with open(f"./out/{folder}.json", "w") as file:
+    with open(f"./out/{folder + '/' + dump if dump else folder}.json", "w") as file:
         json.dump({"data": network.model.graphs, "steps": num, "graphs": network.history}, file)
 
     draw_plots(num, network.model.graphs, path=f"./out/{folder}.jpg")
@@ -303,11 +335,11 @@ def run_steps(graph, num, folder, frames):
         os.remove(out_path)
 
 
-def render_all(frames=config["STEPS"]):
+def render_all(num=config["STEPS"]):
     matplotlib.use('agg')
     for folder in config["runs"]:
-        progress = tqdm(total=frames, desc=f"Render {folder}", unit="steps", leave=True)
-        for step in range(1, frames + 1):
+        progress = tqdm(total=num, desc=f"Render {folder}", unit="steps", leave=True)
+        for step in range(1, num + 1):
             graph = pickle.load(open(f"./runs/{folder}/graphs/{step:04d}.pickle", 'rb'))
             SocialNetwork.draw(graph).savefig(f"./runs/{folder}/{step:04d}.jpg", bbox_inches="tight", dpi=config["DPI"])
             progress.update(1)
@@ -342,7 +374,29 @@ def run_all(frames=True, num=config["STEPS"]):
             shutil.rmtree(path)
 
         os.makedirs(path + "/graphs")
-        run_steps(copy.deepcopy(base_graph), num, run, frames)
+        repeats = config["REPEATS"] if not frames else 1
+        if repeats > 1:
+            repeats_path = f"./out/{run}"
+            if os.path.exists(repeats_path):
+                shutil.rmtree(repeats_path)
+            os.mkdir(repeats_path)
+            for repeat in range(repeats):
+                run_steps(copy.deepcopy(base_graph), num, run, frames, dump=str(repeat))
+            make_average(num, run, repeats)
+        else:
+            run_steps(copy.deepcopy(base_graph), num, run, frames)
+
+
+def make_average(num, run, repeats):
+    print(f"Averaging {repeats} runs of {run}")
+    output = {code: numpy.zeros((num,)) for code in SocialNetwork.long_codes}
+    # add data from every repeat to an averaged output
+    for repeat in range(repeats):
+        repeat_data = json.load(open(f'./out/{run}/{repeat}.json', 'r'))["data"]
+        for code in repeat_data:
+            output[code] += numpy.array(repeat_data[code]) / repeats
+    with open(f"./out/{run}.json", "w") as file:
+        json.dump({"data": {code: output[code].tolist() for code in output}, "steps": num}, file)
 
 
 if __name__ == '__main__':

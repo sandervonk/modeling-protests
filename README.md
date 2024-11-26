@@ -20,6 +20,7 @@ Model options can be configured in the config.json file. The options are as foll
 - **DPI**: (int) the dots per inch to save matplotlib renders at
 - **FPS**: (int) the frames (steps) per second that the final video will play at; this will be corrected for the skip factor
 - **SKIP**: (int) the number of steps to skip between rendered frames. default is 1
+- **REPEATS**: (int) the number of runs to calculate and average (in headless mode only). default is 1
 - Model: (dict) options for the model, as follows
     - Size: the "shape" or "size" of the initial model
         - **total**: (int) full number of nodes for the network to reach during the build stage

@@ -3,6 +3,7 @@
     "DPI": 400,
     "FPS": 30,
     "SKIP": 1,
+    "REPEATS": 10,
     "model": {
         "size": {
             "total": 200,

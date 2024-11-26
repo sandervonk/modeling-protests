@@ -12,10 +12,21 @@ def remove_run_data():
         print("* No run data to remove")
 
 
+def remove_repeat_data():
+    seen = False
+    for entry in os.listdir("./out"):
+        path = f"./out/{entry}"
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+            seen = True
+    print("* Removed repeat data" if seen else "* No repeat data to remove")
+
+
 if len(sys.argv) == 1:
     run_all(frames=False)
 elif sys.argv[1] == "remove":
     remove_run_data()
+    remove_repeat_data()
 elif sys.argv[1] == "render":
     render_all()
 else:
@@ -26,9 +37,10 @@ else:
 
     if "render" in sys.argv:
         try:
-            render_all(frames=int(sys.argv[1]))
+            render_all(num=int(sys.argv[1]))
         except ValueError:
             render_all()
 
     if "remove" in sys.argv:
         remove_run_data()
+        remove_repeat_data()
